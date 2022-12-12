@@ -6,13 +6,19 @@
         "direction": "in",
         "name": "Request",
         "methods": [
-          "get",
+          "get"
         ]
       },
       {
         "type": "http",
         "direction": "out",
         "name": "Response"
+      },
+      {
+        "type": "queue",
+        "direction": "out",
+        "name": "Msg",
+        "queueName": "expermrptqueue"
       }
     ]
   }
