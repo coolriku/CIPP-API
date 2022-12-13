@@ -101,8 +101,8 @@ try {
 catch {
     $ErrorMessage = Get-NormalizedError -Message $_.Exception.Message
     $GraphRequest = [pscustomobject]@{
-        Identity = [string]$ErrorMessage
-        User         = [string]$null
+        Identity = [string]$null
+        User         = [string]$ErrorMessage
         AccessRights = [string]$null
         Type = [string]$null
         FolderName = [string]$null
