@@ -1,7 +1,6 @@
 using namespace System.Net
 
 # Input bindings are passed in via param block.
-#param($Request, $TriggerMetadata)
 param([string] $QueueItem, $TriggerMetadata)
 
 $APIName = $TriggerMetadata.FunctionName
@@ -13,6 +12,7 @@ Write-Host "PowerShell HTTP trigger function processed a request."
 
 #Define Arrays
 $ArrayPermissions = @()
+
 # Get Tenant
 $TenantFilter = $QueueItem
 
@@ -47,14 +47,13 @@ try {
         $ArrayPermissions += $mailboxPerms
     }
     #Get Send As / On Behalf Permissions
-    $RecipPerms = New-ExoRequest -tenantid $TenantFilter -cmdlet "Get-RecipientPermission" -cmdParams @{ ResultSize = 'Unlimited' } | Where-Object {$_.Identity -in $mailboxes.Identity}
+    $RecipPerms = New-ExoRequest -tenantid $TenantFilter -cmdlet "Get-RecipientPermission" -cmdParams @{ ResultSize = 'Unlimited' } | Where-Object {$_.Identity -in $Mailboxes.Identity}
     foreach ($RecipPerm in $RecipPerms){
-        if($RecipPerm.TrusteeSidString -eq 'S-1-5-10'){
+        if($RecipPerm.TrusteeSidString -eq 'S-1-5-10'){ #if trustee is SELF than skip item
             #do nothing
         }
         else{
-            $ArrayPermissions +=
-            [pscustomobject]@{
+            $ArrayPermissions += [pscustomobject]@{
                 Identity = ($Mailboxes | Where-Object {$_.Identity -eq $RecipPerm.Identity}).PrimarySmtpAddress
                 User         = $RecipPerm.Trustee
                 AccessRights = $RecipPerm.AccessRights -join ', '
@@ -97,7 +96,6 @@ try {
             $ArrayPermissions += $MailboxCalPerms
         }
     }
-
     $GraphRequest = $ArrayPermissions
 }
 catch {
@@ -110,13 +108,16 @@ catch {
         FolderName = [string]$null
     }
 }
-
-$Row = @{
-    RowKey  = [string](New-Guid).guid
-    Tenant = [string]$TenantFilter
-    Report = [string]( $GraphRequest | ConvertTo-Json -Compress )
-    PartitionKey = 'ExchPermReport'
+try{
+    $Row = @{
+        RowKey  = [string](New-Guid).guid
+        Tenant = [string]$TenantFilter
+        Report = [string]( $GraphRequest | ConvertTo-Json -Compress )
+        PartitionKey = 'ExchPermReport'
+    }
+    Remove-AzDataTableEntity @Table -Entry (Get-AzDataTableEntity @Table | Where-Object {$_.RowKey -eq $LoadingGuid})
+    Add-AzDataTableEntity @Table -Entity $Row -Force | Out-Null
 }
-
-Remove-AzDataTableEntity @Table -Entry (Get-AzDataTableEntity @Table | Where-Object {$_.RowKey -eq $LoadingGuid})
-Add-AzDataTableEntity @Table -Entity $Row -Force | Out-Null
+catch {
+    Write-LogMessage -user 'CIPP' -API $APINAME  -message "Failed to report save data" -Sev "warn"
+}
