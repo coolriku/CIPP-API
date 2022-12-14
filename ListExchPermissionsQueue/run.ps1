@@ -42,8 +42,8 @@ try {
                     Type = 'Mailbox'
                     FolderName = $null
                 }
-            }   
-        }
+            }
+        }   
         $ArrayPermissions += $mailboxPerms
     }
     #Get Send As / On Behalf Permissions
@@ -80,8 +80,11 @@ try {
             #Get Calendar Folder Permissions
             $MailboxCalPermRequest = New-ExoRequest -tenantid $TenantFilter -cmdlet "Get-MailboxFolderPermission" -cmdParams $CalParam
             $MailboxCalPerms = foreach ($CalPerm in $MailboxCalPermRequest) {
-                if(($CalPerm.User -in @('Default','Anonymous')) -and ($CalPerm.AccessRights[0] -eq 'None')){
+                if(($CalPerm.User -eq'Anonymous') -and ($CalPerm.AccessRights[0] -eq 'None')){
                     #do nothing
+                }
+                elseif(($CalPerm.User -eq'Default') -and ($CalPerm.AccessRights[0] -eq 'AvailabilityOnly')){
+                    #do Nothing
                 }
                 else {
                     [pscustomobject]@{

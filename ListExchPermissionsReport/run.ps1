@@ -12,43 +12,55 @@ Write-Host 'PowerShell HTTP trigger function processed a request.'
 
 # Interact with query parameters or the body of the request.
 $TenantFilter = $Request.Query.TenantFilter
-
-
+$ForceRefresh = $Request.Query.ForceRefresh
 
 Try{
     $Table = Get-CIPPTable -TableName cacheexpermrpt
-    #Checking for Loading table entry, so no new report is queued.
-    $Loading = Get-AzDataTableEntity @Table | Where-Object {$_.Timestamp -GT (Get-Date).AddMinutes(-30) -and ($_.Tenant -eq $TenantFilter) -and ($_.Report -eq 'Loading')}
-    If ($loading.Report -eq 'Loading'){
-        $GraphRequest = [pscustomobject]@{
-            Identity = $null
-            User         = 'Already Loading. Please be more patient'
-            AccessRights = $null
-            Type = $null
-            FolderName = $null
-        }
-        Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
-            StatusCode = [HttpStatusCode]::OK
-            Body       = @($GraphRequest)
-        })
-        exit
-    }
-    #Else Try to load Report from table.
-    $Rows = Get-AzDataTableEntity @Table | Where-Object {$_.Timestamp -GT (Get-Date).AddMinutes(-30) -and ($_.Tenant -eq $TenantFilter)}
-    #If no rows, than queue new report creation
-    if (!$Rows) {
+    if($TenantFilter -and ($ForceRefresh -eq 'True')){
+        Remove-AzDataTableEntity @Table -Entry (Get-AzDataTableEntity @Table | Where-Object {$_.Tenant -eq $TenantFilter})
         Push-OutputBinding -Name Msg -Value $TenantFilter
         $GraphRequest = [pscustomobject]@{
             Identity = $null
-            User         = 'Loading data. Please check back in 1 minute'
+            User         = 'Forced refresh. Please check back in 1 minute'
             AccessRights = $null
             Type = $null
             FolderName = $null
         }
     }
-    #Load Report
     else {
-        $GraphRequest = $Rows.Report | ConvertFrom-Json
+        #Checking for Loading table entry, so no new report is queued.
+        $Loading = Get-AzDataTableEntity @Table | Where-Object {$_.Timestamp -GT (Get-Date).AddMinutes(-30) -and ($_.Tenant -eq $TenantFilter) -and ($_.Report -eq 'Loading')}
+        If ($loading.Report -eq 'Loading'){
+            $GraphRequest = [pscustomobject]@{
+                Identity = $null
+                User         = 'Already Loading. Please be more patient'
+                AccessRights = $null
+                Type = $null
+                FolderName = $null
+            }
+            Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
+                StatusCode = [HttpStatusCode]::OK
+                Body       = @($GraphRequest)
+            })
+            exit
+        }
+        #Else Try to load Report from table.
+        $Rows = Get-AzDataTableEntity @Table | Where-Object {$_.Timestamp -GT (Get-Date).AddMinutes(-30) -and ($_.Tenant -eq $TenantFilter)}
+        #If no rows, than queue new report creation
+        if (!$Rows) {
+            Push-OutputBinding -Name Msg -Value $TenantFilter
+            $GraphRequest = [pscustomobject]@{
+                Identity = $null
+                User         = 'Loading data. Please check back in 1 minute'
+                AccessRights = $null
+                Type = $null
+                FolderName = $null
+            }
+        }
+        #Load Report
+        else {
+            $GraphRequest = $Rows.Report | ConvertFrom-Json
+        }
     }
 }
 catch{
